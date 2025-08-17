@@ -6,11 +6,18 @@ minimal audio transcription tool
 
 ## install
 
+### homebrew (recommended)
+```sh
+brew tap gmoqa/listen
+brew install listen
+```
+
+### curl
 ```sh
 curl -sSL https://raw.githubusercontent.com/gmoqa/listen/main/install.sh | bash
 ```
 
-or download and run:
+### manual
 ```sh
 git clone https://github.com/gmoqa/listen.git
 cd listen
