@@ -6,23 +6,20 @@ minimal audio transcription tool
 
 ## install
 
-### curl (recommended)
-```sh
-curl -sSL https://raw.githubusercontent.com/gmoqa/listen/main/install.sh | bash
-```
-
-### homebrew
+### homebrew (recommended for mac)
 ```sh
 brew tap gmoqa/listen
 brew install listen
 ```
-*Note: Homebrew requires Command Line Tools*
 
-### manual
+### one-liner (no homebrew needed)
 ```sh
-git clone https://github.com/gmoqa/listen.git
-cd listen
-./install.sh
+curl -sSL https://raw.githubusercontent.com/gmoqa/listen/main/install.sh | bash
+```
+
+### arch linux
+```sh
+yay -S listen
 ```
 
 ## usage
