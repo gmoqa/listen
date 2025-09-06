@@ -16,6 +16,7 @@ lvl = [0.0]
 pct = [0.0]
 verbose = False
 first_run = True
+is_tty = sys.stdout.isatty()
 
 def log(msg):
     if verbose:
@@ -55,8 +56,9 @@ def kbd_listen(q):
 
 
 def draw(c, bars, txt='Listening'):
-    sys.stdout.write(f'\r{RED}●{RST} {txt}  [{c}{bars}{RST}]')
-    sys.stdout.flush()
+    if is_tty:
+        sys.stdout.write(f'\r{RED}●{RST} {txt}  [{c}{bars}{RST}]')
+        sys.stdout.flush()
 
 
 def record(start_proc):
@@ -79,7 +81,7 @@ def record(start_proc):
     threading.Thread(target=kbd_listen, args=(q,), daemon=True).start()
     draw('', ' ' * 10)
 
-    if first_run:
+    if first_run and is_tty:
         time.sleep(0.3)
         print(f'\n\n  Press SPACE to stop recording\n', file=sys.stderr)
         time.sleep(1.5)
@@ -182,8 +184,9 @@ def main():
         with open(marker, 'w') as f:
             f.write('')
 
-    sys.stdout.write(HOME)
-    sys.stdout.flush()
+    if is_tty:
+        sys.stdout.write(HOME)
+        sys.stdout.flush()
 
     lang = 'en'
     mdl = 'base'
@@ -237,7 +240,8 @@ def main():
 
     try:
         r = transcribe(tmp.name, mdl, lang, run, blink_state)
-        sys.stdout.write('\r' + CLR)
+        if is_tty:
+            sys.stdout.write('\r' + CLR)
         log(f'Final transcription: "{r["text"].strip()}"')
         print(r['text'].strip())
     except Exception as e:
