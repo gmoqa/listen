@@ -42,9 +42,72 @@ vad_enabled = False
 vad_silence_duration = VAD_DEFAULT_DURATION
 vad_threshold = VAD_THRESHOLD
 
+# Scripting mode flags
+quiet_mode = False
+json_mode = False
+clipboard_mode = False
+output_file = None
+
 def log(msg):
     if verbose:
         print(f'\n[DEBUG] {msg}', file=sys.stderr)
+
+
+def output_transcription(text, lang, model_name, duration=None):
+    """Handle transcription output based on flags"""
+    import json as json_lib
+
+    # Prepare data
+    if json_mode:
+        data = {
+            "transcription": text,
+            "language": lang,
+            "model": model_name
+        }
+        if duration:
+            data["duration"] = duration
+        output_text = json_lib.dumps(data, ensure_ascii=False)
+    else:
+        output_text = text
+
+    # Output to stdout (unless suppressed by -o or --clipboard only)
+    if not output_file or not clipboard_mode:
+        print(output_text, flush=True)
+
+    # Write to file if specified
+    if output_file:
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(output_text)
+            if not quiet_mode and not json_mode:
+                print(f'Written to {output_file}', file=sys.stderr)
+        except Exception as e:
+            print(f'Error writing to file: {e}', file=sys.stderr)
+
+    # Copy to clipboard if specified
+    if clipboard_mode:
+        try:
+            import subprocess
+            import platform
+
+            system = platform.system()
+            if system == 'Darwin':  # macOS
+                subprocess.run(['pbcopy'], input=output_text.encode('utf-8'), check=True)
+            elif system == 'Linux':
+                # Try xclip first, then xsel
+                try:
+                    subprocess.run(['xclip', '-selection', 'clipboard'],
+                                 input=output_text.encode('utf-8'), check=True)
+                except FileNotFoundError:
+                    subprocess.run(['xsel', '--clipboard', '--input'],
+                                 input=output_text.encode('utf-8'), check=True)
+            elif system == 'Windows':
+                subprocess.run(['clip'], input=output_text.encode('utf-8'), check=True)
+
+            if not quiet_mode and not json_mode:
+                print('Copied to clipboard', file=sys.stderr)
+        except Exception as e:
+            print(f'Error copying to clipboard: {e}', file=sys.stderr)
 
 
 def signal_handler(signum, frame):
@@ -96,6 +159,9 @@ def kbd_listen(q):
 
 
 def draw(c, bars, txt='Listening', hint=''):
+    # Skip UI in quiet/json mode
+    if quiet_mode or json_mode:
+        return
     # Always show UI on stderr when not TTY (piped), or stdout when TTY
     out = sys.stderr if not is_tty else sys.stdout
     hint_str = f'  {MAG}{hint}{RST}' if hint else ''
@@ -508,6 +574,11 @@ def main():
         print("  --signal-mode           Use SIGUSR1 signal to stop recording")
         print("  --vad SECONDS           Auto-stop after N seconds of silence")
         print("  -v, --verbose           Verbose output")
+        print("\nScripting options:")
+        print("  -q, --quiet             Suppress UI, output only transcription")
+        print("  -j, --json              Output in JSON format")
+        print("  --clipboard             Copy transcription to clipboard")
+        print("  -o, --output FILE       Write transcription to file")
         print("\nServer options:")
         print(f"  --host HOST             Server host (default: {DEFAULT_SERVER_HOST})")
         print(f"  --port PORT             Server port (default: {DEFAULT_SERVER_PORT})")
@@ -529,12 +600,8 @@ def main():
         with open(marker, 'w') as f:
             f.write('')
 
-    # Clear screen on the appropriate stream
-    out = sys.stderr if not is_tty else sys.stdout
-    out.write(HOME)
-    out.flush()
-
     # Parse CLI arguments (only explicitly provided ones)
+    global quiet_mode, json_mode, clipboard_mode, output_file
     cli_args = {}
     file_path = None
     i = 0
@@ -552,6 +619,18 @@ def main():
         elif arg in ['-c', '--claude']:
             cli_args['claude'] = True
             i += 1
+        elif arg in ['-q', '--quiet']:
+            quiet_mode = True
+            i += 1
+        elif arg in ['-j', '--json']:
+            json_mode = True
+            i += 1
+        elif arg == '--clipboard':
+            clipboard_mode = True
+            i += 1
+        elif arg in ['-o', '--output'] and i + 1 < len(args):
+            output_file = args[i + 1]
+            i += 2
         elif arg in ['-s', '--server']:
             if 'server' not in cli_args:
                 cli_args['server'] = {}
@@ -589,6 +668,12 @@ def main():
     defaults = config.get_defaults()
     file_config = config.load_config()
     final_config = config.merge_config(defaults, file_config, cli_args)
+
+    # Clear screen on the appropriate stream (unless in quiet/json mode)
+    if not quiet_mode and not json_mode:
+        out = sys.stderr if not is_tty else sys.stdout
+        out.write(HOME)
+        out.flush()
 
     # Extract values from merged config
     lang = final_config['language']
@@ -653,10 +738,11 @@ def main():
 
         try:
             r = transcribe(file_path, mdl, lang, run, blink_state)
-            # Clear the UI line
-            out = sys.stderr if not is_tty else sys.stdout
-            out.write('\r' + CLR)
-            out.flush()
+            # Clear the UI line (unless in quiet/json mode)
+            if not quiet_mode and not json_mode:
+                out = sys.stderr if not is_tty else sys.stdout
+                out.write('\r' + CLR)
+                out.flush()
             log(f'Final transcription: "{r["text"].strip()}"')
 
             text = r['text'].strip()
@@ -679,7 +765,7 @@ def main():
                     print(f'Error running claude: {e}', file=sys.stderr)
                     sys.exit(1)
             else:
-                print(text, flush=True)
+                output_transcription(text, lang, mdl)
         except Exception as e:
             log(f'Transcription error: {e}')
             print(f'Error: {e}', file=sys.stderr)
@@ -732,10 +818,11 @@ def main():
 
     try:
         r = transcribe(tmp.name, mdl, lang, run, blink_state)
-        # Clear the UI line on the appropriate stream
-        out = sys.stderr if not is_tty else sys.stdout
-        out.write('\r' + CLR)
-        out.flush()
+        # Clear the UI line on the appropriate stream (unless in quiet/json mode)
+        if not quiet_mode and not json_mode:
+            out = sys.stderr if not is_tty else sys.stdout
+            out.write('\r' + CLR)
+            out.flush()
         log(f'Final transcription: "{r["text"].strip()}"')
 
         text = r['text'].strip()
@@ -759,7 +846,7 @@ def main():
                 print(f'Error running claude: {e}', file=sys.stderr)
                 sys.exit(1)
         else:
-            print(text, flush=True)
+            output_transcription(text, lang, mdl)
     except Exception as e:
         log(f'Transcription error: {e}')
         sys.exit(1)

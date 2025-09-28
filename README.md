@@ -54,6 +54,18 @@ listen -f audio.mp3 -c        # transcribe and send to claude
 
 supports: mp3, wav, m4a, flac, ogg, and other formats supported by ffmpeg
 
+### scripting / automation
+```sh
+listen -f audio.mp3 --quiet              # no UI, just text
+listen -f audio.mp3 --json               # JSON output
+listen -f audio.mp3 --clipboard          # copy to clipboard
+listen -f audio.mp3 -o transcript.txt    # save to file
+
+# combine flags
+listen -f audio.mp3 --quiet --json -o output.json
+listen --quiet --clipboard               # record & copy
+```
+
 ### configuration
 
 **set defaults (persistent)**

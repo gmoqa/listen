@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- **Scripting mode flags** - Perfect for automation and workflows
+  - `-q/--quiet` - Suppress UI, output only transcription text
+  - `-j/--json` - Output in JSON format with metadata
+  - `--clipboard` - Auto-copy transcription to clipboard (macOS/Linux/Windows)
+  - `-o/--output FILE` - Write transcription to file
+
 ## [1.2.0] - 2025-01-04
 
 ### Added
@@ -14,11 +23,6 @@ All notable changes to this project will be documented in this file.
   - Test coverage reporting with pytest-cov
   - Automated test runner script (`run_tests.sh`)
   - CI-ready test infrastructure
-- **Suckless philosophy alignment**
-  - Complete codebase review following suckless.org principles
-  - Simplified configuration system (config_simple.py - 72% reduction)
-  - Detailed analysis and roadmap for further simplification
-  - Philosophy section in README
 
 ### Changed
 - Updated README with file processing examples
