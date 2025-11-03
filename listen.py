@@ -268,12 +268,18 @@ def main():
         if use_claude:
             # Send transcribed text as prompt to claude
             import subprocess
+            import shlex
             log(f'Sending to claude as prompt: "{text}"')
+
+            # Try common claude paths
+            claude_path = os.path.expanduser('~/.claude/local/claude')
+            if not os.path.exists(claude_path):
+                claude_path = 'claude'
+
             try:
-                subprocess.run(['claude', '-p', text], check=True)
-            except FileNotFoundError:
-                print(f'Error: claude command not found. Install Claude CLI first.', file=sys.stderr)
-                sys.exit(1)
+                # Use shell=True to support aliases, properly escape text
+                cmd = f'{claude_path} -p {shlex.quote(text)}'
+                subprocess.run(cmd, shell=True, check=True)
             except subprocess.CalledProcessError as e:
                 print(f'Error running claude: {e}', file=sys.stderr)
                 sys.exit(1)
