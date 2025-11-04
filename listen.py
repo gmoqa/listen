@@ -54,8 +54,8 @@ def kbd_listen(q):
         pass
 
 
-def draw(c, bars):
-    sys.stdout.write(f'\r{RED}●{RST} Listening  [{c}{bars}{RST}]')
+def draw(c, bars, txt='Listening'):
+    sys.stdout.write(f'\r{RED}●{RST} {txt}  [{c}{bars}{RST}]')
     sys.stdout.flush()
 
 
@@ -214,7 +214,7 @@ def main():
                 else:
                     bars = '=' * max(1, n) + ' ' * (10 - max(1, n))
                 blink_state[0] += 1
-                draw(YEL, bars)
+                draw(YEL, bars, 'Processing')
                 time.sleep(0.05)
         threading.Thread(target=prog, daemon=True).start()
         pct[0] = 0.0
