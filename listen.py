@@ -108,7 +108,10 @@ def record(start_proc):
     if rec:
         frames = len(rec)
         log(f'Concatenating {frames} audio frames')
-        return np.concatenate(rec)
+        data = np.concatenate(rec)
+        if data.ndim > 1:
+            data = data.flatten()
+        return data
     else:
         log('No audio recorded')
         return None
@@ -134,6 +137,8 @@ def transcribe(path, model, lang, run, blink_state):
 
         class P:
             def write(self, txt):
+                if verbose and txt.strip():
+                    print(f'[WHISPER] {txt.strip()}', file=sys.__stderr__)
                 if '%' in txt and (x := re.search(r'(\d+)%', txt)):
                     pct[0] = 0.2 + int(x.group(1)) / 100.0 * 0.8
             def flush(self): pass
