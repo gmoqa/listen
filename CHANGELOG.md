@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.2.2] - 2025-01-04
+
+### Fixed
+- **Clean error handling** - No more ugly Python tracebacks
+  - Show clean error messages by default
+  - Full traceback available with `-v/--verbose` flag
+  - Graceful handling of KeyboardInterrupt (Ctrl+C)
+
 ## [1.2.1] - 2025-01-04
 
 ### Added
