@@ -500,6 +500,7 @@ def main():
         print("\nModes:")
         print("  (default)           Record audio from microphone and transcribe")
         print("  -s, --server        Start HTTP API server for transcription")
+        print("  -f, --file FILE     Transcribe audio from file (mp3, wav, m4a, etc.)")
         print("\nOptions:")
         print("  -l, --language LANG     Language code (default: from config or 'en')")
         print("  -m, --model MODEL       Whisper model (default: from config or 'base')")
@@ -535,6 +536,7 @@ def main():
 
     # Parse CLI arguments (only explicitly provided ones)
     cli_args = {}
+    file_path = None
     i = 0
     args = sys.argv[1:]
 
@@ -555,6 +557,9 @@ def main():
                 cli_args['server'] = {}
             cli_args['server']['enabled'] = True
             i += 1
+        elif arg in ['-f', '--file'] and i + 1 < len(args):
+            file_path = args[i + 1]
+            i += 2
         elif arg == '--signal-mode':
             cli_args['signal_mode'] = True
             i += 1
@@ -604,6 +609,84 @@ def main():
     # Server mode
     if server_mode:
         start_server(host=server_host, port=server_port, model=mdl, lang=lang)
+        return
+
+    # File mode - transcribe from file
+    if file_path:
+        # Validate file exists
+        if not os.path.exists(file_path):
+            print(f'Error: File not found: {file_path}', file=sys.stderr)
+            sys.exit(1)
+
+        # Validate file is readable
+        if not os.path.isfile(file_path):
+            print(f'Error: Not a file: {file_path}', file=sys.stderr)
+            sys.exit(1)
+
+        # Check file size (warn if > 100MB)
+        file_size = os.path.getsize(file_path)
+        if file_size > 100 * 1024 * 1024:
+            print(f'Warning: Large file ({file_size / (1024*1024):.1f}MB), transcription may take a while', file=sys.stderr)
+
+        log(f'Processing file: {file_path} ({file_size} bytes)')
+
+        # Show processing UI
+        global pct
+        run = [True]
+        blink_state = [0]
+
+        def start_proc():
+            def prog():
+                while run[0]:
+                    n = int(pct[0] * 10)
+                    if pct[0] < 0.15:
+                        bars = ('=' if (blink_state[0] // 6) % 2 == 0 else ' ') + ' ' * 9
+                    else:
+                        bars = '=' * max(1, n) + ' ' * (10 - max(1, n))
+                    blink_state[0] += 1
+                    draw(YEL, bars, 'Processing')
+                    time.sleep(0.05)
+            threading.Thread(target=prog, daemon=True).start()
+            pct[0] = 0.0
+
+        start_proc()
+
+        try:
+            r = transcribe(file_path, mdl, lang, run, blink_state)
+            # Clear the UI line
+            out = sys.stderr if not is_tty else sys.stdout
+            out.write('\r' + CLR)
+            out.flush()
+            log(f'Final transcription: "{r["text"].strip()}"')
+
+            text = r['text'].strip()
+
+            if use_claude:
+                # Send transcribed text as prompt to claude
+                import subprocess
+                import shlex
+                log(f'Sending to claude as prompt: "{text}"')
+
+                # Try common claude paths
+                claude_path = os.path.expanduser('~/.claude/local/claude')
+                if not os.path.exists(claude_path):
+                    claude_path = 'claude'
+
+                try:
+                    cmd = f'{claude_path} -p {shlex.quote(text)}'
+                    subprocess.run(cmd, shell=True, check=True)
+                except subprocess.CalledProcessError as e:
+                    print(f'Error running claude: {e}', file=sys.stderr)
+                    sys.exit(1)
+            else:
+                print(text, flush=True)
+        except Exception as e:
+            log(f'Transcription error: {e}')
+            print(f'Error: {e}', file=sys.stderr)
+            sys.exit(1)
+        finally:
+            run[0] = False
+
         return
 
     # Configure signal handler if in signal mode

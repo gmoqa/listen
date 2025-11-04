@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>listen - minimal audio transcription</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 700px;
+            background: white;
+            border-radius: 8px;
+            padding: 40px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+
+        h1 {
+            font-size: 3em;
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+
+        .tagline {
+            font-size: 1.2em;
+            color: #666;
+            margin-bottom: 30px;
+        }
+
+        .install {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 5px;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .install code {
+            color: #667eea;
+        }
+
+        .features {
+            margin: 30px 0;
+        }
+
+        .features ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .features li {
+            padding: 8px 0;
+            padding-left: 25px;
+            position: relative;
+        }
+
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #667eea;
+            font-weight: bold;
+        }
+
+        .cta {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 30px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            font-weight: 500;
+            transition: background 0.3s;
+        }
+
+        .btn:hover {
+            background: #5568d3;
+        }
+
+        footer {
+            margin-top: 40px;
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+        }
+
+        footer a {
+            color: #667eea;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>listen</h1>
+        <p class="tagline">minimal audio transcription tool</p>
+
+        <div class="install">
+            <strong>Mac/Linux:</strong><br>
+            <code>brew tap gmoqa/listen</code><br>
+            <code>brew install listen</code>
+            <br><br>
+            <strong>Arch Linux:</strong><br>
+            <code>yay -S listen</code>
+            <br><br>
+            <strong>Termux (Android):</strong><br>
+            <code>curl -sSL https://raw.githubusercontent.com/gmoqa/listen/main/install-termux.sh | bash</code>
+        </div>
+
+        <div class="features">
+            <ul>
+                <li>Local-first: all processing on your device</li>
+                <li>Simple: one command to transcribe</li>
+                <li>Multi-language support (50+ languages)</li>
+                <li>Audio file transcription (mp3, wav, m4a, flac)</li>
+                <li>Auto-stop with silence detection</li>
+                <li>HTTP API server mode</li>
+            </ul>
+        </div>
+
+        <div class="cta">
+            <a href="https://github.com/gmoqa/listen" class="btn">View on GitHub</a>
+        </div>
+
+        <footer>
+            <p>local audio transcription</p>
+        </footer>
+    </div>
+</body>
+</html>

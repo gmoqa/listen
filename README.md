@@ -44,6 +44,16 @@ listen -v           # verbose mode
 
 press SPACE to stop recording
 
+### file processing
+```sh
+listen -f audio.mp3           # transcribe audio file
+listen -f audio.wav -l es     # transcribe with language
+listen -f audio.m4a -m medium # transcribe with better model
+listen -f audio.mp3 -c        # transcribe and send to claude
+```
+
+supports: mp3, wav, m4a, flac, ogg, and other formats supported by ffmpeg
+
 ### configuration
 
 **set defaults (persistent)**
@@ -118,6 +128,50 @@ pulseaudio --start
 # check microphone access
 termux-microphone-record -f test.wav -l 1
 termux-microphone-record -q
+```
+
+## development
+
+### running tests
+
+**quick start**
+```sh
+./run_tests.sh              # run all tests
+./run_tests.sh quick        # quick run (minimal output)
+./run_tests.sh coverage     # run with coverage report
+./run_tests.sh config       # run only config tests
+./run_tests.sh listen       # run only listen tests
+```
+
+**using pytest directly**
+```sh
+# run all tests
+pytest
+
+# run with coverage report
+pytest --cov=. --cov-report=html
+
+# run specific test file
+pytest test_config.py -v
+
+# run specific test class
+pytest test_config.py::TestConfigDefaults -v
+
+# run specific test
+pytest test_config.py::TestConfigDefaults::test_get_defaults -v
+```
+
+### test structure
+- `test_config.py` - tests for configuration management
+- `test_listen.py` - tests for CLI and main functionality
+- `conftest.py` - shared fixtures and test utilities
+- `pytest.ini` - pytest configuration
+
+### coverage
+view coverage report after running tests with `--cov-report=html`:
+```sh
+open htmlcov/index.html  # mac
+xdg-open htmlcov/index.html  # linux
 ```
 
 ## uninstall
