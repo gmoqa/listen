@@ -28,6 +28,7 @@ yay -S listen
 listen              # record and transcribe (english)
 listen -l es        # spanish
 listen -m medium    # better model
+listen -v           # verbose mode (debug logs)
 ```
 
 press SPACE to stop recording
