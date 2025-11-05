@@ -9,7 +9,7 @@ license=('MIT')
 depends=('python' 'python-numpy' 'python-sounddevice' 'portaudio' 'ffmpeg')
 makedepends=('python-pip')
 source=("$pkgname-$pkgver.tar.gz::https://github.com/gmoqa/listen/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('39249cdc1c162861b6e670013c48b0a377b4063890d6d34e3bc1a089bd340bb6')
+sha256sums=('314d8b3ee553b5b54746dd98d8d6c18f913125f5fada0c55d1de9d9265eb3a16')
 
 build() {
   cd "$pkgname-$pkgver"
