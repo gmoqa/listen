@@ -1,6 +1,6 @@
 # Maintainer: Guillermo Quinteros <gu.quinteros@gmail.com>
 pkgname=listen
-pkgver=1.2.2
+pkgver=1.2.3
 pkgrel=1
 pkgdesc="Minimal audio transcription tool - 100% on-premise"
 arch=('any')

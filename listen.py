@@ -211,62 +211,72 @@ def record(start_proc):
     silence_start = None
     has_speech = False
 
+    # Create stream without context manager for explicit control
+    stream = sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype=DTYPE, callback=audio_cb)
+
     try:
-        with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS, dtype=DTYPE, callback=audio_cb):
-            t0 = time.time()
-            while True:
-                draw('', '=' * min(int(lvl[0] * 200), 10) + ' ' * max(10 - int(lvl[0] * 200), 0), hint=hint)
+        stream.start()
+        log('Audio stream started')
+        t0 = time.time()
 
-                # Check signal stop (for signal mode)
-                if signal_mode and signal_stop[0]:
-                    dur = time.time() - t0
-                    log(f'Recording stopped by signal after {dur:.2f}s')
-                    break
+        while True:
+            draw('', '=' * min(int(lvl[0] * 200), 10) + ' ' * max(10 - int(lvl[0] * 200), 0), hint=hint)
 
-                # VAD: Check for silence
-                if vad_enabled:
-                    current_level = lvl[0]
+            # Check signal stop (for signal mode)
+            if signal_mode and signal_stop[0]:
+                dur = time.time() - t0
+                log(f'Recording stopped by signal after {dur:.2f}s')
+                break
 
-                    # Detect if currently silent
-                    is_silent = current_level < vad_threshold
+            # VAD: Check for silence
+            if vad_enabled:
+                current_level = lvl[0]
 
-                    if not is_silent:
-                        # Speech detected
-                        has_speech = True
-                        silence_start = None
-                        log(f'Speech detected (level: {current_level:.4f})')
-                    elif has_speech:
-                        # Silence after speech
-                        if silence_start is None:
-                            silence_start = time.time()
-                            log(f'Silence started (level: {current_level:.4f})')
-                        else:
-                            silence_duration = time.time() - silence_start
-                            if silence_duration >= vad_silence_duration:
-                                dur = time.time() - t0
-                                log(f'Recording stopped after {silence_duration:.2f}s of silence (total: {dur:.2f}s)')
-                                break
+                # Detect if currently silent
+                is_silent = current_level < vad_threshold
 
-                # Check timeout when piped
-                if timeout and (time.time() - t0) >= timeout:
-                    log(f'Recording stopped after timeout ({timeout}s)')
-                    break
-
-                # Check keyboard input (only if not in signal mode)
-                if not signal_mode:
-                    try:
-                        if q.get_nowait():
+                if not is_silent:
+                    # Speech detected
+                    has_speech = True
+                    silence_start = None
+                    log(f'Speech detected (level: {current_level:.4f})')
+                elif has_speech:
+                    # Silence after speech
+                    if silence_start is None:
+                        silence_start = time.time()
+                        log(f'Silence started (level: {current_level:.4f})')
+                    else:
+                        silence_duration = time.time() - silence_start
+                        if silence_duration >= vad_silence_duration:
                             dur = time.time() - t0
-                            log(f'Recording stopped after {dur:.2f}s')
+                            log(f'Recording stopped after {silence_duration:.2f}s of silence (total: {dur:.2f}s)')
                             break
-                    except queue.Empty:
-                        pass
 
-                time.sleep(0.05)
+            # Check timeout when piped
+            if timeout and (time.time() - t0) >= timeout:
+                log(f'Recording stopped after timeout ({timeout}s)')
+                break
+
+            # Check keyboard input (only if not in signal mode)
+            if not signal_mode:
+                try:
+                    if q.get_nowait():
+                        dur = time.time() - t0
+                        log(f'Recording stopped after {dur:.2f}s')
+                        break
+                except queue.Empty:
+                    pass
+
+            time.sleep(0.01)  # Reduced from 0.05 for faster signal detection
     except Exception as e:
         log(f'Error during recording: {e}')
         print(f'\n{e}', file=sys.stderr)
         return None
+    finally:
+        # Explicitly stop and close stream
+        stream.stop()
+        stream.close()
+        log('Audio stream stopped and closed')
 
     for _ in range(3):
         draw('', '=' * 10)
@@ -783,6 +793,10 @@ def main():
     if signal_mode:
         signal.signal(signal.SIGUSR1, signal_handler)
         log('Signal mode enabled: listening for SIGUSR1')
+        # Show PID in stderr even in quiet/json mode (needed for signal)
+        if quiet_mode or json_mode:
+            pid = os.getpid()
+            print(f'PID: {pid}  # Send SIGUSR1 to stop: kill -SIGUSR1 {pid}', file=sys.stderr)
 
     log(f'Starting listen (language={lang}, model={mdl})')
 
