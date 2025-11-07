@@ -2,6 +2,8 @@
 import sys, os, tempfile, wave, time, threading, queue, fcntl, termios, re, signal
 import config
 
+__version__ = '1.2.3'
+
 # Lazy imports (loaded only when needed)
 np = None
 sd = None
@@ -47,6 +49,7 @@ quiet_mode = False
 json_mode = False
 clipboard_mode = False
 output_file = None
+codevoice_mode = False
 
 def log(msg):
     if verbose:
@@ -169,6 +172,47 @@ def draw(c, bars, txt='Listening', hint=''):
     out.flush()
 
 
+def draw_codevoice(level, txt='Listening', hint=''):
+    # Skip UI in quiet/json mode
+    if quiet_mode or json_mode:
+        return
+
+    # Get terminal width
+    try:
+        import shutil
+        terminal_width = shutil.get_terminal_size().columns
+    except:
+        terminal_width = 80
+
+    # Always show UI on stderr when not TTY (piped), or stdout when TTY
+    out = sys.stderr if not is_tty else sys.stdout
+
+    # Calculate bar width (leave space for indicator and text)
+    prefix = f'{RED}●{RST} {txt}  '
+    # Strip ANSI codes for length calculation
+    prefix_len = len('● ' + txt + '  ')
+
+    hint_len = len(hint) + 2 if hint else 0
+    available_width = terminal_width - prefix_len - hint_len - 4
+
+    if available_width < 10:
+        available_width = 10
+
+    # Create full-width bar based on audio level
+    filled = int(level * available_width)
+    filled = max(0, min(filled, available_width))
+
+    # Create visual bar with gradient effect
+    bar = '█' * filled + '░' * (available_width - filled)
+
+    # Add hint if present
+    hint_str = f'  {MAG}{hint}{RST}' if hint else ''
+
+    # Write full line
+    out.write(f'\r{prefix}[{YEL}{bar}{RST}]{hint_str}')
+    out.flush()
+
+
 def record(start_proc):
     global rec, np, sd, signal_stop
 
@@ -220,7 +264,10 @@ def record(start_proc):
         t0 = time.time()
 
         while True:
-            draw('', '=' * min(int(lvl[0] * 200), 10) + ' ' * max(10 - int(lvl[0] * 200), 0), hint=hint)
+            if codevoice_mode:
+                draw_codevoice(lvl[0], hint=hint)
+            else:
+                draw('', '=' * min(int(lvl[0] * 200), 10) + ' ' * max(10 - int(lvl[0] * 200), 0), hint=hint)
 
             # Check signal stop (for signal mode)
             if signal_mode and signal_stop[0]:
@@ -562,11 +609,16 @@ def handle_config_command(args):
 
 
 def main():
-    global verbose, first_run, signal_mode, vad_enabled, vad_silence_duration
+    global verbose, first_run, signal_mode, vad_enabled, vad_silence_duration, codevoice_mode
 
     # Check if this is a config subcommand
     if len(sys.argv) > 1 and sys.argv[1] == 'config':
         sys.exit(handle_config_command(sys.argv[2:]))
+
+    # Handle version before config loading
+    if len(sys.argv) > 1 and sys.argv[1] == '--version':
+        print(f"listen {__version__}")
+        return
 
     # Handle help before config loading
     if len(sys.argv) > 1 and sys.argv[1] in ['-h', '--help']:
@@ -583,6 +635,8 @@ def main():
         print("  -c, --claude            Send transcription to Claude")
         print("  --signal-mode           Use SIGUSR1 signal to stop recording")
         print("  --vad SECONDS           Auto-stop after N seconds of silence")
+        print("  --codevoice             Full-width visual mode for code voice input")
+        print("  --version               Show version and exit")
         print("  -v, --verbose           Verbose output")
         print("\nScripting options:")
         print("  -q, --quiet             Suppress UI, output only transcription")
@@ -658,6 +712,9 @@ def main():
             cli_args['vad']['enabled'] = True
             cli_args['vad']['silence_duration'] = float(args[i + 1])
             i += 2
+        elif arg == '--codevoice':
+            cli_args['codevoice'] = True
+            i += 1
         elif arg == '--host' and i + 1 < len(args):
             if 'server' not in cli_args:
                 cli_args['server'] = {}
@@ -680,10 +737,11 @@ def main():
     final_config = config.merge_config(defaults, file_config, cli_args)
 
     # Clear screen on the appropriate stream (unless in quiet/json mode)
-    if not quiet_mode and not json_mode:
-        out = sys.stderr if not is_tty else sys.stdout
-        out.write(HOME)
-        out.flush()
+    # Disabled: now displays inline with the cursor position
+    # if not quiet_mode and not json_mode:
+    #     out = sys.stderr if not is_tty else sys.stdout
+    #     out.write(HOME)
+    #     out.flush()
 
     # Extract values from merged config
     lang = final_config['language']
@@ -691,6 +749,7 @@ def main():
     use_claude = final_config['claude']
     verbose = final_config['verbose']
     signal_mode = final_config['signal_mode']
+    codevoice_mode = final_config['codevoice']
 
     # VAD settings
     vad_enabled = final_config['vad']['enabled']

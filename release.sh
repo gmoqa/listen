@@ -80,6 +80,11 @@ sed -i.bak "s/^pkgrel=.*/pkgrel=1/" PKGBUILD
 sed -i.bak "s/^sha256sums=.*/sha256sums=('$SHA256')/" PKGBUILD
 rm PKGBUILD.bak
 
+# Update version in listen.py
+info "Updating version in listen.py"
+sed -i.bak "s/^__version__ = .*/__version__ = '$VERSION_NUM'/" listen.py
+rm listen.py.bak
+
 # Generate .SRCINFO
 info "Generating .SRCINFO"
 if command -v makepkg &> /dev/null; then

@@ -42,6 +42,7 @@ def get_defaults():
         'claude': False,
         'verbose': False,
         'signal_mode': False,
+        'codevoice': False,
         'vad': {
             'enabled': False,
             'silence_duration': 2.0,
