@@ -39,6 +39,7 @@ quiet_mode = False
 json_mode = False
 output_file = None
 codevoice_mode = False
+status_file = None
 
 # Help text
 HELP = """usage: listen [MODE] [OPTIONS]
@@ -60,6 +61,7 @@ Scripting options:
   -q, --quiet             Suppress UI, output only transcription
   -j, --json              Output in JSON format
   -o, --output FILE       Write transcription to file
+  --status-file FILE      Write real-time status to JSON file
 
 Recording controls:
   (default) Press SPACE to stop recording
@@ -73,6 +75,23 @@ Configuration:
 def log(msg):
     if verbose:
         print(f'\n[DEBUG] {msg}', file=sys.stderr)
+
+
+def write_status(data):
+    """Write status to JSON file atomically"""
+    if not status_file:
+        return
+
+    try:
+        import json
+        # Atomic write: write to temp file then rename
+        temp_file = f"{status_file}.tmp"
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False)
+        os.replace(temp_file, status_file)
+        log(f'Status written: {data.get("status")}')
+    except Exception as e:
+        log(f'Error writing status file: {e}')
 
 
 def output_transcription(text, lang, model_name, duration=None):
@@ -187,7 +206,7 @@ def draw(level, txt='Listening', hint='', fullwidth=False):
     out.flush()
 
 
-def record(start_proc):
+def record(start_proc, lang, mdl):
     global rec, signal_stop
 
     rec = []
@@ -200,15 +219,32 @@ def record(start_proc):
 
     # Determine hint message based on mode
     hint = ''
+    mode = 'space'
     if signal_mode:
         pid = os.getpid()
         hint = f'Signal mode: kill -SIGUSR1 {pid}'
+        mode = 'signal'
     elif vad_enabled:
         hint = f'VAD mode: auto-stop after {vad_silence_duration}s silence'
+        mode = 'vad'
     elif stdin_is_tty:
         hint = 'Press SPACE to stop'
 
     draw(0.0, hint=hint, fullwidth=codevoice_mode)
+
+    # Write initial status
+    write_status({
+        'status': 'recording',
+        'audio_level': 0.0,
+        'pid': os.getpid(),
+        'language': lang,
+        'model': mdl,
+        'timestamp': int(time.time()),
+        'progress': 0.0,
+        'duration': 0.0,
+        'mode': mode,
+        'transcription': None
+    })
 
     log(f'Starting audio stream ({SAMPLE_RATE//1000}kHz, {"stereo" if CHANNELS == 2 else "mono"})')
     # In signal mode or VAD mode, no timeout - wait for signal/silence
@@ -229,6 +265,20 @@ def record(start_proc):
 
         while True:
             draw(lvl[0], hint=hint, fullwidth=codevoice_mode)
+
+            # Update status with current audio level
+            write_status({
+                'status': 'recording',
+                'audio_level': float(lvl[0]),
+                'pid': os.getpid(),
+                'language': lang,
+                'model': mdl,
+                'timestamp': int(time.time()),
+                'progress': 0.0,
+                'duration': time.time() - t0,
+                'mode': mode,
+                'transcription': None
+            })
 
             # Check signal stop (for signal mode)
             if signal_mode and signal_stop[0]:
@@ -279,6 +329,12 @@ def record(start_proc):
     except Exception as e:
         log(f'Error during recording: {e}')
         print(f'\n{e}', file=sys.stderr)
+        write_status({
+            'status': 'error',
+            'error_message': str(e),
+            'pid': os.getpid(),
+            'timestamp': int(time.time())
+        })
         return None
     finally:
         # Explicitly stop and close stream
@@ -310,6 +366,21 @@ def transcribe(path, model, lang, run=None, blink_state=None):
     global pct
 
     log(f'Loading Whisper model: {model}')
+
+    # Write processing status
+    write_status({
+        'status': 'processing',
+        'audio_level': 0.0,
+        'pid': os.getpid(),
+        'language': lang,
+        'model': model,
+        'timestamp': int(time.time()),
+        'progress': 0.0,
+        'duration': 0.0,
+        'mode': 'processing',
+        'transcription': None
+    })
+
     try:
         t0 = time.time()
         m = whisper.load_model(model)
@@ -325,8 +396,22 @@ def transcribe(path, model, lang, run=None, blink_state=None):
                 if verbose and txt.strip():
                     print(f'[WHISPER] {txt.strip()}', file=sys.__stderr__)
                 if '%' in txt and (x := re.search(r'(\d+)%', txt)):
+                    progress = int(x.group(1)) / 100.0
                     if blink_state:
-                        pct[0] = 0.2 + int(x.group(1)) / 100.0 * 0.8
+                        pct[0] = 0.2 + progress * 0.8
+                    # Update status with progress
+                    write_status({
+                        'status': 'processing',
+                        'audio_level': 0.0,
+                        'pid': os.getpid(),
+                        'language': lang,
+                        'model': model,
+                        'timestamp': int(time.time()),
+                        'progress': progress,
+                        'duration': 0.0,
+                        'mode': 'processing',
+                        'transcription': None
+                    })
             def flush(self): pass
 
         old = sys.stderr
@@ -343,6 +428,15 @@ def transcribe(path, model, lang, run=None, blink_state=None):
         if blink_state:
             pct[0] = 1.0
             time.sleep(0.1)
+    except Exception as e:
+        log(f'Transcription error in transcribe(): {e}')
+        write_status({
+            'status': 'error',
+            'error_message': str(e),
+            'pid': os.getpid(),
+            'timestamp': int(time.time())
+        })
+        raise
     finally:
         time.sleep(0.05)
 
@@ -401,6 +495,20 @@ def process_file(file_path, lang, mdl, codevoice):
 
         text = r['text'].strip()
         output_transcription(text, lang, mdl)
+
+        # Write final status
+        write_status({
+            'status': 'done',
+            'audio_level': 0.0,
+            'pid': os.getpid(),
+            'language': lang,
+            'model': mdl,
+            'timestamp': int(time.time()),
+            'progress': 1.0,
+            'duration': 0.0,
+            'mode': 'done',
+            'transcription': text
+        })
     except Exception as e:
         log(f'Transcription error: {e}')
         if verbose:
@@ -433,7 +541,7 @@ def process_recording(lang, mdl, sig_mode, codevoice):
     def start_proc():
         show_processing_animation(run, pct, blink_state, codevoice)
 
-    data = record(start_proc)
+    data = record(start_proc, lang, mdl)
     if data is None or len(data) == 0:
         log('No audio data to process')
         sys.exit(1)
@@ -460,6 +568,20 @@ def process_recording(lang, mdl, sig_mode, codevoice):
 
         text = r['text'].strip()
         output_transcription(text, lang, mdl)
+
+        # Write final status
+        write_status({
+            'status': 'done',
+            'audio_level': 0.0,
+            'pid': os.getpid(),
+            'language': lang,
+            'model': mdl,
+            'timestamp': int(time.time()),
+            'progress': 1.0,
+            'duration': 0.0,
+            'mode': 'done',
+            'transcription': text
+        })
     except Exception as e:
         log(f'Transcription error: {e}')
         if verbose:
@@ -491,7 +613,7 @@ def main():
         return
 
     # Parse CLI arguments with argparse
-    global quiet_mode, json_mode, output_file
+    global quiet_mode, json_mode, output_file, status_file
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('-l', '--language', default=config.LANGUAGE)
     parser.add_argument('-m', '--model', default=config.MODEL)
@@ -499,6 +621,7 @@ def main():
     parser.add_argument('-q', '--quiet', action='store_true')
     parser.add_argument('-j', '--json', action='store_true', dest='json_output')
     parser.add_argument('-o', '--output')
+    parser.add_argument('--status-file', dest='status_file')
     parser.add_argument('-v', '--verbose', action='store_true')
     parser.add_argument('--signal-mode', action='store_true')
     parser.add_argument('--vad', type=float, metavar='SECONDS')
@@ -513,6 +636,7 @@ def main():
     quiet_mode = args.quiet
     json_mode = args.json_output
     output_file = args.output
+    status_file = args.status_file
     verbose = args.verbose if args.verbose else config.SHOW_VERBOSE
     signal_mode = args.signal_mode
     vad_enabled = args.vad is not None
