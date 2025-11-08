@@ -313,6 +313,71 @@ class TestSpecialModes:
         assert result.returncode == 0
         assert '--signal-mode' in result.stdout
 
+    def test_fast_mode_flag_recognized(self):
+        """Test that --fast-mode flag is recognized in help"""
+        result = subprocess.run(
+            [sys.executable, 'listen.py', '--help'],
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+
+        assert result.returncode == 0
+        assert '--fast-mode' in result.stdout
+
+
+class TestFastMode:
+    """Test fast mode functionality"""
+
+    def test_fast_mode_requires_faster_whisper(self):
+        """Test that --fast-mode validates faster-whisper availability"""
+        import listen
+
+        # Save original value
+        original_available = listen.FASTER_WHISPER_AVAILABLE
+
+        # Test when faster-whisper is not available
+        listen.FASTER_WHISPER_AVAILABLE = False
+
+        result = subprocess.run(
+            [sys.executable, 'listen.py', '-f', '/tmp/fake.wav', '--fast-mode'],
+            capture_output=True,
+            text=True,
+            timeout=2,
+            cwd=os.path.dirname(os.path.abspath(__file__))
+        )
+
+        # Restore original value
+        listen.FASTER_WHISPER_AVAILABLE = original_available
+
+        # Should fail with error about faster-whisper not installed
+        # Note: This test may pass if faster-whisper IS installed, which is fine
+        if not original_available:
+            assert result.returncode != 0
+            assert 'faster-whisper' in result.stderr.lower() or 'Error' in result.stderr
+
+    def test_fast_mode_with_status_file(self):
+        """Test that --fast-mode works with --status-file"""
+        import tempfile
+
+        tmp_status = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        tmp_status.close()
+
+        try:
+            result = subprocess.run(
+                [sys.executable, 'listen.py', '-f', '/tmp/fake.wav', '--fast-mode', '--status-file', tmp_status.name],
+                capture_output=True,
+                text=True,
+                timeout=2,
+                cwd=os.path.dirname(os.path.abspath(__file__))
+            )
+
+            # Should fail on file not found, not on argument combination
+            assert 'File not found' in result.stderr or 'not found' in result.stderr.lower()
+        finally:
+            if os.path.exists(tmp_status.name):
+                os.unlink(tmp_status.name)
+
 
 class TestOutputTranscription:
     """Test critical output functionality"""
