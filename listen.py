@@ -12,7 +12,7 @@ try:
 except ImportError:
     FASTER_WHISPER_AVAILABLE = False
 
-__version__ = '2.0.0'
+__version__ = '2.1.0'
 
 # ANSI escape codes
 CLR = '\033[K'
