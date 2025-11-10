@@ -57,6 +57,19 @@ if [ ! -d "$HOMEBREW_REPO" ]; then
     fi
 fi
 
+# Check if AUR repo path is set
+AUR_REPO="${AUR_LISTEN_PATH:-../listen-aur}"
+if [ ! -d "$AUR_REPO" ]; then
+    warn "AUR repo not found at $AUR_REPO"
+    read -p "Enter path to listen-aur repo (or skip with Enter): " custom_path
+    if [ -n "$custom_path" ]; then
+        AUR_REPO="$custom_path"
+    else
+        warn "Skipping AUR sync"
+        AUR_REPO=""
+    fi
+fi
+
 info "Creating git tag v$VERSION_NUM"
 git tag -a "v$VERSION_NUM" -m "$RELEASE_NOTES"
 
@@ -85,6 +98,13 @@ info "Updating version in listen.py"
 sed -i.bak "s/^__version__ = .*/__version__ = '$VERSION_NUM'/" listen.py
 rm listen.py.bak
 
+# Update Termux build.sh
+info "Updating termux/build.sh"
+sed -i.bak "s/^TERMUX_PKG_VERSION=.*/TERMUX_PKG_VERSION=$VERSION_NUM/" termux/build.sh
+sed -i.bak "s|^TERMUX_PKG_SRCURL=.*|TERMUX_PKG_SRCURL=https://github.com/gmoqa/listen/archive/refs/tags/v\${TERMUX_PKG_VERSION}.tar.gz|" termux/build.sh
+sed -i.bak "s/^TERMUX_PKG_SHA256=.*/TERMUX_PKG_SHA256=$SHA256/" termux/build.sh
+rm termux/build.sh.bak
+
 # Generate .SRCINFO
 info "Generating .SRCINFO"
 if command -v makepkg &> /dev/null; then
@@ -95,8 +115,8 @@ else
 fi
 
 # Commit AUR changes
-info "Committing AUR package changes"
-git add PKGBUILD .SRCINFO
+info "Committing package changes"
+git add PKGBUILD .SRCINFO listen.py termux/build.sh
 git commit -m "Bump version to $VERSION_NUM
 
 $RELEASE_NOTES"
@@ -127,6 +147,33 @@ else
     warn "Skipping Homebrew update"
 fi
 
+# Sync with AUR repo if it exists
+if [ -n "$AUR_REPO" ] && [ -d "$AUR_REPO" ]; then
+    info "Syncing with AUR repository"
+
+    # Copy PKGBUILD and .SRCINFO to AUR repo
+    cp PKGBUILD "$AUR_REPO/PKGBUILD"
+
+    # Generate .SRCINFO for AUR repo
+    if [ -f ".SRCINFO" ]; then
+        cp .SRCINFO "$AUR_REPO/.SRCINFO"
+    fi
+
+    cd "$AUR_REPO"
+
+    # Commit and push
+    git add PKGBUILD .SRCINFO
+    git commit -m "Bump version to $VERSION_NUM
+
+$RELEASE_NOTES"
+    git push origin main
+
+    cd - > /dev/null
+    info "AUR repository synced"
+else
+    warn "Skipping AUR sync"
+fi
+
 info ""
 info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 info "Release v$VERSION_NUM completed successfully!"
@@ -134,14 +181,18 @@ info "━━━━━━━━━━━━━━━━━━━━━━━━�
 info ""
 info "Updated:"
 info "  ✓ Git tag: v$VERSION_NUM"
-info "  ✓ AUR package (PKGBUILD + .SRCINFO)"
+info "  ✓ Main repo (PKGBUILD + .SRCINFO + termux/build.sh)"
+if [ -n "$AUR_REPO" ] && [ -d "$AUR_REPO" ]; then
+    info "  ✓ AUR repository (listen-aur)"
+fi
 if [ -n "$HOMEBREW_REPO" ] && [ -d "$HOMEBREW_REPO" ]; then
-    info "  ✓ Homebrew formula"
+    info "  ✓ Homebrew formula (homebrew-listen)"
 fi
 info ""
 info "SHA256: $SHA256"
 info ""
 info "Users can now install with:"
-info "  brew upgrade listen"
-info "  yay -Syu listen"
+info "  brew upgrade listen              # Homebrew (macOS/Linux)"
+info "  yay -Syu listen                  # AUR (Arch Linux)"
+info "  pkg upgrade listen               # Termux (Android)"
 info ""
